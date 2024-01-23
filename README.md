@@ -7,5 +7,6 @@ Currently only MFA methods that take a user input (in form of a code) work
 ---
 
 To run the project, you need Node v20
-Install dependencies `npm i`
+
+Install dependencies `npm i`  
 And run using `npm run start`
