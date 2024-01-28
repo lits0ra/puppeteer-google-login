@@ -21,6 +21,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
-    "@types/puppeteer": "^7.0.4"
+    "@types/puppeteer": "^7.0.4",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
   }
 }
