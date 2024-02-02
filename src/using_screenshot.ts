@@ -3,18 +3,68 @@ import readline from "readline";
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { KeyInput, Page } from "puppeteer";
+import sharp from "sharp";
 
 import OpenAI from "openai";
 import fs from "fs";
 import { ChatCompletionContentPartImage } from "openai/resources/index.mjs";
 
+const height = 720;
+const width = 1280;
+const gridWidth = 200;
+const gridHeight = 100;
+
+const generateGridSVG = () => {
+  let svgGrid = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+
+  for (let x = 0; x <= width; x += gridWidth) {
+    for (let y = 0; y <= height; y += gridHeight) {
+      svgGrid += `<line x1="${x}" y1="${y - 10}" x2="${x}" y2="${
+        y + 10
+      }" stroke="#ccc" stroke-width="2"/>`;
+      svgGrid += `<line x1="${x - 10}" y1="${y}" x2="${
+        x + 10
+      }" y2="${y}" stroke="#ccc" stroke-width="2"/>`;
+      svgGrid += `<text x="${x + 2}" y="${
+        y - 2
+      }" fill="red">(x=${x},y=${y})</text>`;
+    }
+  }
+
+  svgGrid += `</svg>`;
+  return svgGrid;
+};
+
+const overlayGrid = async (imagePath, intermediatePath, outputPath) => {
+  try {
+    await sharp(imagePath).normalize().toFile(intermediatePath);
+
+    // Generate the grid SVG
+    const svgGrid = generateGridSVG();
+
+    const gridOverlayBuffer = Buffer.from(svgGrid);
+
+    // Overlay the grid on the original image
+    await sharp(intermediatePath)
+      .composite([{ input: gridOverlayBuffer }])
+      .toFile(outputPath);
+
+    console.log(`Grid overlay image saved to ${outputPath}`);
+  } catch (err) {
+    console.error("Error creating grid overlay:", err);
+  }
+};
+
+const imagePath = "screenshot.jpg"; // Path to the input image
+const intermediatePath = "screenshot_with_contrast.jpg"; // Path to the input image
+const outputPath = "screenshot_with_grid.jpg"; // Path to save the output image
+
+// overlayGrid(imagePath, outputPath);
+
 const convertToBase64 = (file) => {
   let fileData = fs.readFileSync(file);
   return Buffer.from(fileData).toString("base64");
 };
-
-const height = 720;
-const width = 1280;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -48,22 +98,19 @@ const askForBounds = async () => {
           {
             type: "image_url",
             image_url: `data:image/jpeg;base64,${convertToBase64(
-              "./screenshot.jpg"
+              "./screenshot_with_grid.jpg"
             )}` as unknown as ChatCompletionContentPartImage.ImageURL,
           },
           {
             type: "text",
-            text: `This screenshot is ${width}px wide and ${height}px in height. 
-            Provide an answer in the form of {x_topleft: number; y_topleft: number; width: number; height: number;} json object. 
-            Here x_topleft is the x coordinate where the input box starts, and y_topleft is the y coordinate where the box starts
+            text: `This is a screenshot is ${width}px wide and ${height}px in height. 
+            Some coordinates have been written on the image in (x,y) format.
+            Provide an answer in the form of {x: number; y: number; width: number; height: number;} json object. 
+            Here x is the number of pixels from left where the input box starts, and y is the number of pixels from top where the box starts
             width and height are those of the input box.
             Do not consider the borders in calculation
             
-            Can you tell me the starting and ending coordinates of the input box. It is a very small rectangle.              
-            ${
-              "" // Can you tell me the coordinates where I should click so that it is inside the email input element box in the screenshot?
-              // Make sure the response can pass through JSON.parse in Javascript.
-            }
+            Can you tell me the starting and ending coordinates of the input box. It is a very small rectangle.
             Just output the object without wrapping in any text or code block`,
           },
         ],
@@ -174,6 +221,12 @@ function loginToGoogle() {
     await page.screenshot({
       path: "screenshot.jpg",
     });
+
+    await overlayGrid(imagePath, intermediatePath, outputPath);
+
+    let res = await askForBounds();
+
+    console.log(res);
 
     let response = await openai.chat.completions.create({
       seed: 397428934,
